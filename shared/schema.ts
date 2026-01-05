@@ -6,7 +6,9 @@ export const workLogSchema = z.object({
   date: z.string(), // ISO Date string
   title: z.string().min(1, "Title is required"), // "What work I am doing"
   description: z.string().min(1, "Description is required"),
-  impact: z.string().optional(), // "What impact it created"
+  impact: z.string().optional(), // "What impact it created" (text)
+  impactLevel: z.enum(["low", "medium", "high", "very high"]).default("medium"), // Impact slider
+  component: z.string().optional(), // The component worked on
   hoursSpent: z.coerce.number().min(0).default(0),
   issues: z.string().optional(), // "What issues it faced"
   iterations: z.coerce.number().int().min(0).default(0), // "How many reiteration"
@@ -29,3 +31,11 @@ export type InsertWorkLog = z.infer<typeof insertWorkLogSchema>;
 // Request/Response Types
 export type CreateWorkLogRequest = InsertWorkLog;
 export type UpdateWorkLogRequest = Partial<InsertWorkLog>;
+
+// Component Tracking
+export const componentSchema = z.object({
+  id: z.string(),
+  name: z.string().min(1),
+});
+
+export type Component = z.infer<typeof componentSchema>;

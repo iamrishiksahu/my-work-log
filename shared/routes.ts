@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { workLogSchema, insertWorkLogSchema } from './schema';
+import { workLogSchema, insertWorkLogSchema, componentSchema } from './schema';
 
 export const errorSchemas = {
   validation: z.object({
@@ -56,6 +56,24 @@ export const api = {
       responses: {
         204: z.void(),
         404: errorSchemas.notFound,
+      },
+    },
+  },
+  components: {
+    list: {
+      method: 'GET' as const,
+      path: '/api/components',
+      responses: {
+        200: z.array(componentSchema),
+      },
+    },
+    create: {
+      method: 'POST' as const,
+      path: '/api/components',
+      input: z.object({ name: z.string().min(1) }),
+      responses: {
+        201: componentSchema,
+        400: errorSchemas.validation,
       },
     },
   },
