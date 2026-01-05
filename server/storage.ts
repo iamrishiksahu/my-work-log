@@ -1,4 +1,4 @@
-import { WorkLog, InsertWorkLog, UpdateWorkLogRequest, Component } from "@shared/schema";
+import { WorkLog, InsertWorkLog, UpdateWorkLogRequest, Component, InsertComponent } from "@shared/schema";
 import fs from "fs/promises";
 import path from "path";
 import { randomUUID } from "crypto";
@@ -11,11 +11,11 @@ export interface IStorage {
   deleteWorkLog(id: string): Promise<void>;
   
   getComponents(): Promise<Component[]>;
-  createComponent(name: string): Promise<Component>;
+  createComponent(component: InsertComponent): Promise<Component>;
 }
 
 const DATA_DIR = "data";
-const LOGS_FILE = path.join(DATA_DIR, "worklogs.json");
+const DATA_FILE = path.join(DATA_DIR, "worklogs.json");
 const COMPONENTS_FILE = path.join(DATA_DIR, "components.json");
 
 export class JsonFileStorage implements IStorage {
@@ -32,37 +32,62 @@ export class JsonFileStorage implements IStorage {
     } catch (e) {}
   }
 
-  private async readFile<T>(filePath: string): Promise<T[]> {
+  private async readLogs(): Promise<WorkLog[]> {
+    if (this.logsMemo) return this.logsMemo;
     await this.ensureDataDir();
     try {
-      const data = await fs.readFile(filePath, "utf-8");
-      return JSON.parse(data);
+      const data = await fs.readFile(DATA_FILE, "utf-8");
+      this.logsMemo = JSON.parse(data);
+      return this.logsMemo!;
     } catch (error) {
       if ((error as any).code === 'ENOENT') {
+        this.logsMemo = [];
         return [];
       }
       throw error;
     }
   }
 
-  private async writeFile<T>(filePath: string, data: T[]) {
+  private async readComponents(): Promise<Component[]> {
+    if (this.componentsMemo) return this.componentsMemo;
     await this.ensureDataDir();
-    await fs.writeFile(filePath, JSON.stringify(data, null, 2));
+    try {
+      const data = await fs.readFile(COMPONENTS_FILE, "utf-8");
+      this.componentsMemo = JSON.parse(data);
+      return this.componentsMemo!;
+    } catch (error) {
+      if ((error as any).code === 'ENOENT') {
+        this.componentsMemo = [];
+        return [];
+      }
+      throw error;
+    }
+  }
+
+  private async writeLogs(data: WorkLog[]) {
+    this.logsMemo = data;
+    await this.ensureDataDir();
+    await fs.writeFile(DATA_FILE, JSON.stringify(data, null, 2));
+  }
+
+  private async writeComponents(data: Component[]) {
+    this.componentsMemo = data;
+    await this.ensureDataDir();
+    await fs.writeFile(COMPONENTS_FILE, JSON.stringify(data, null, 2));
   }
 
   async getWorkLogs(): Promise<WorkLog[]> {
-    if (this.logsMemo) return this.logsMemo;
-    this.logsMemo = await this.readFile<WorkLog>(LOGS_FILE);
-    return this.logsMemo.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    const logs = await this.readLogs();
+    return logs.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   }
 
   async getWorkLog(id: string): Promise<WorkLog | undefined> {
-    const logs = await this.getWorkLogs();
+    const logs = await this.readLogs();
     return logs.find(l => l.id === id);
   }
 
   async createWorkLog(insertLog: InsertWorkLog): Promise<WorkLog> {
-    const logs = await this.getWorkLogs();
+    const logs = await this.readLogs();
     const newLog: WorkLog = {
       ...insertLog,
       id: randomUUID(),
@@ -78,57 +103,42 @@ export class JsonFileStorage implements IStorage {
       images: insertLog.images || [],
     };
     logs.push(newLog);
-    this.logsMemo = logs;
-    await this.writeFile(LOGS_FILE, logs);
-    
-    // Also ensure component exists if provided
-    if (newLog.component) {
-      const components = await this.getComponents();
-      if (!components.find(c => c.name.toLowerCase() === newLog.component?.toLowerCase())) {
-        await this.createComponent(newLog.component);
-      }
-    }
-    
+    await this.writeLogs(logs);
     return newLog;
   }
 
   async updateWorkLog(id: string, updates: UpdateWorkLogRequest): Promise<WorkLog> {
-    const logs = await this.getWorkLogs();
+    const logs = await this.readLogs();
     const index = logs.findIndex(l => l.id === id);
     if (index === -1) throw new Error("Log not found");
     
     const updatedLog = { ...logs[index], ...updates };
     logs[index] = updatedLog;
-    this.logsMemo = logs;
-    await this.writeFile(LOGS_FILE, logs);
+    await this.writeLogs(logs);
     return updatedLog;
   }
 
   async deleteWorkLog(id: string): Promise<void> {
-    let logs = await this.getWorkLogs();
+    let logs = await this.readLogs();
     logs = logs.filter(l => l.id !== id);
-    this.logsMemo = logs;
-    await this.writeFile(LOGS_FILE, logs);
+    await this.writeLogs(logs);
   }
 
   async getComponents(): Promise<Component[]> {
-    if (this.componentsMemo) return this.componentsMemo;
-    this.componentsMemo = await this.readFile<Component>(COMPONENTS_FILE);
-    return this.componentsMemo.sort((a, b) => a.name.localeCompare(b.name));
+    return await this.readComponents();
   }
 
-  async createComponent(name: string): Promise<Component> {
-    const components = await this.getComponents();
-    const existing = components.find(c => c.name.toLowerCase() === name.toLowerCase());
-    if (existing) return existing;
-
+  async createComponent(insertComponent: InsertComponent): Promise<Component> {
+    const components = await this.readComponents();
+    if (components.find(c => c.name === insertComponent.name)) {
+      return components.find(c => c.name === insertComponent.name)!;
+    }
     const newComponent: Component = {
+      ...insertComponent,
       id: randomUUID(),
-      name: name,
     };
     components.push(newComponent);
-    this.componentsMemo = components;
-    await this.writeFile(COMPONENTS_FILE, components);
+    await this.writeComponents(components);
     return newComponent;
   }
 }

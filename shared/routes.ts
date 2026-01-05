@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { workLogSchema, insertWorkLogSchema, componentSchema } from './schema';
+import { workLogSchema, insertWorkLogSchema, componentSchema, insertComponentSchema } from './schema';
 
 export const errorSchemas = {
   validation: z.object({
@@ -70,7 +70,7 @@ export const api = {
     create: {
       method: 'POST' as const,
       path: '/api/components',
-      input: z.object({ name: z.string().min(1) }),
+      input: insertComponentSchema,
       responses: {
         201: componentSchema,
         400: errorSchemas.validation,
@@ -81,7 +81,6 @@ export const api = {
     create: {
       method: 'POST' as const,
       path: '/api/upload',
-      // input is FormData
       responses: {
         200: z.object({ url: z.string() }),
         400: errorSchemas.validation,
