@@ -1,18 +1,31 @@
-import { sql } from "drizzle-orm";
-import { pgTable, text, varchar } from "drizzle-orm/pg-core";
-import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
-export const users = pgTable("users", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  username: text("username").notNull().unique(),
-  password: text("password").notNull(),
+// Work Log Data Model
+export const workLogSchema = z.object({
+  id: z.string(),
+  date: z.string(), // ISO Date string
+  title: z.string().min(1, "Title is required"), // "What work I am doing"
+  description: z.string().min(1, "Description is required"),
+  impact: z.string().optional(), // "What impact it created"
+  hoursSpent: z.coerce.number().min(0).default(0),
+  issues: z.string().optional(), // "What issues it faced"
+  iterations: z.coerce.number().int().min(0).default(0), // "How many reiteration"
+  failures: z.string().optional(), // "What were its failures"
+  metrics: z.string().optional(), // "Necessary metrics"
+  images: z.array(z.string()).default([]), // "Attach images"
 });
 
-export const insertUserSchema = createInsertSchema(users).pick({
-  username: true,
-  password: true,
+export const insertWorkLogSchema = workLogSchema.omit({ 
+  id: true, 
+  date: true 
+}).extend({
+  // Optional override for date, otherwise auto-tracked
+  date: z.string().optional(),
 });
 
-export type InsertUser = z.infer<typeof insertUserSchema>;
-export type User = typeof users.$inferSelect;
+export type WorkLog = z.infer<typeof workLogSchema>;
+export type InsertWorkLog = z.infer<typeof insertWorkLogSchema>;
+
+// Request/Response Types
+export type CreateWorkLogRequest = InsertWorkLog;
+export type UpdateWorkLogRequest = Partial<InsertWorkLog>;
