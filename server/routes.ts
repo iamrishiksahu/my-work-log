@@ -89,6 +89,27 @@ export async function registerRoutes(
     res.status(204).send();
   });
 
+  app.get(api.components.list.path, async (_req, res) => {
+    const components = await storage.getComponents();
+    res.json(components);
+  });
+
+  app.post(api.components.create.path, async (req, res) => {
+    try {
+      const input = api.components.create.input.parse(req.body);
+      const component = await storage.createComponent(input);
+      res.status(201).json(component);
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        return res.status(400).json({
+          message: err.errors[0].message,
+          field: err.errors[0].path.join('.'),
+        });
+      }
+      throw err;
+    }
+  });
+
   app.post(api.upload.create.path, upload.single('file'), (req, res) => {
     if (!req.file) {
       return res.status(400).json({ message: "No file uploaded" });
@@ -103,14 +124,19 @@ export async function registerRoutes(
       title: "Initial Setup",
       description: "Setting up the work log application with file storage and image uploads.",
       impact: "Created a centralized place to track work progress.",
+      jira: "",
+      type: "task",
       hoursSpent: 4,
       issues: "Deciding on storage strategy for serverless environments.",
       iterations: 1,
       failures: "None so far.",
       metrics: "Time to deploy: < 10 mins",
       images: [],
+      component: "Platform",
+      impactLevel: "medium",
       date: new Date().toISOString()
     });
+    await storage.createComponent({ name: "Platform" });
   }
 
   return httpServer;

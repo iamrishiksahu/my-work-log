@@ -1,4 +1,4 @@
-import { useWorkLogs } from "@/hooks/use-work-logs";
+import { useWorkLogs, useComponents } from "@/hooks/use-work-logs";
 import { WorkLogCard } from "@/components/WorkLogCard";
 import { WorkLogForm } from "@/components/WorkLogForm";
 import { DashboardStats } from "@/components/DashboardStats";
@@ -6,19 +6,46 @@ import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger, SheetDescription } from "@/components/ui/sheet";
 import { Plus, Search, Terminal } from "lucide-react";
 import { Input } from "@/components/ui/input";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Loader2 } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
 
 export default function Dashboard() {
   const { data: logs, isLoading, error } = useWorkLogs();
+  const { data: components } = useComponents();
   const [search, setSearch] = useState("");
   const [isAdding, setIsAdding] = useState(false);
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [impactFilter, setImpactFilter] = useState<"all" | "low" | "medium" | "high" | "very_high">("all");
+  const [componentFilter, setComponentFilter] = useState<string>("all");
 
-  // Filter logs based on search
-  const filteredLogs = logs?.filter(log => 
-    log.title.toLowerCase().includes(search.toLowerCase()) || 
-    log.description.toLowerCase().includes(search.toLowerCase())
-  ).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()); // Newest first
+  const filteredLogs = useMemo(() => {
+    if (!logs) return [];
+    return logs
+      .filter(log =>
+        log.title.toLowerCase().includes(search.toLowerCase()) ||
+        log.description.toLowerCase().includes(search.toLowerCase())
+      )
+      .filter(log => {
+        if (dateFrom && new Date(log.date) < new Date(dateFrom)) return false;
+        if (dateTo && new Date(log.date) > new Date(dateTo)) return false;
+        return true;
+      })
+      .filter(log => impactFilter === "all" || log.impactLevel === impactFilter)
+      .filter(log => componentFilter === "all" || (log.component || "").toLowerCase() === componentFilter.toLowerCase())
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  }, [logs, search, dateFrom, dateTo, impactFilter, componentFilter]);
+
+  const appliedFilters = useMemo(() => {
+    const list: string[] = [];
+    if (impactFilter !== "all") list.push(`Impact: ${impactFilter.replace("_", " ")}`);
+    if (componentFilter !== "all") list.push(`Component: ${componentFilter}`);
+    if (dateFrom) list.push(`From: ${dateFrom}`);
+    if (dateTo) list.push(`To: ${dateTo}`);
+    return list;
+  }, [impactFilter, componentFilter, dateFrom, dateTo]);
 
   if (isLoading) {
     return (
@@ -78,18 +105,103 @@ export default function Dashboard() {
         {logs && <DashboardStats logs={logs} />}
 
         {/* Filters & Search */}
-        <div className="flex flex-col sm:flex-row gap-4 mb-6 items-center justify-between">
-          <div className="relative w-full sm:w-96">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input 
-              placeholder="Search logs by title or content..." 
-              className="pl-10 bg-white dark:bg-black/20"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
+        <div className="space-y-4 mb-6">
+          <div className="flex flex-col lg:flex-row gap-4 items-center justify-between">
+            <div className="relative w-full lg:w-96">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input 
+                placeholder="Search logs by title or content..." 
+                className="pl-10 bg-white dark:bg-black/20"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+            </div>
+            <div className="text-sm text-muted-foreground font-medium">
+              Showing {filteredLogs.length} of {logs?.length ?? 0} entries
+            </div>
           </div>
-          <div className="text-sm text-muted-foreground font-medium">
-            {filteredLogs?.length} entries found
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+            <div className="flex flex-col gap-2">
+              <label className="text-sm font-medium text-muted-foreground">Impact</label>
+              <Select value={impactFilter} onValueChange={(value) => setImpactFilter(value as any)}>
+                <SelectTrigger className="bg-white/50">
+                  <SelectValue placeholder="All" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All</SelectItem>
+                  <SelectItem value="low">Low</SelectItem>
+                  <SelectItem value="medium">Medium</SelectItem>
+                  <SelectItem value="high">High</SelectItem>
+                  <SelectItem value="very_high">Very High</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <label className="text-sm font-medium text-muted-foreground">Component</label>
+              <Select value={componentFilter} onValueChange={setComponentFilter}>
+                <SelectTrigger className="bg-white/50">
+                  <SelectValue placeholder="All components" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All components</SelectItem>
+                  {components?.map((component) => (
+                    <SelectItem key={component.id} value={component.name}>
+                      {component.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <label className="text-sm font-medium text-muted-foreground">From date</label>
+              <Input
+                type="date"
+                value={dateFrom}
+                onChange={(e) => setDateFrom(e.target.value)}
+                className="bg-white/50"
+              />
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <label className="text-sm font-medium text-muted-foreground">To date</label>
+              <Input
+                type="date"
+                value={dateTo}
+                onChange={(e) => setDateTo(e.target.value)}
+                className="bg-white/50"
+              />
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            {appliedFilters.length > 0 ? (
+              appliedFilters.map((filter) => (
+                <Badge key={filter} variant="secondary" className="flex items-center gap-2">
+                  {filter}
+                </Badge>
+              ))
+            ) : (
+              <span className="text-xs text-muted-foreground">No filters applied</span>
+            )}
+            {(appliedFilters.length > 0 || search) && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setImpactFilter("all");
+                  setComponentFilter("all");
+                  setDateFrom("");
+                  setDateTo("");
+                  setSearch("");
+                }}
+              >
+                Clear filters
+              </Button>
+            )}
           </div>
         </div>
 

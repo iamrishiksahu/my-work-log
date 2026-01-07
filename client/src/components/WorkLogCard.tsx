@@ -1,6 +1,6 @@
 import { WorkLog } from "@shared/schema";
 import { format } from "date-fns";
-import { Clock, AlertTriangle, RefreshCw, BarChart2, Edit2, Trash2, Calendar, Target } from "lucide-react";
+import { Clock, AlertTriangle, RefreshCw, BarChart2, Edit2, Trash2, Calendar, Target, Layers, Flame } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -29,6 +29,21 @@ export function WorkLogCard({ log }: WorkLogCardProps) {
   const deleteMutation = useDeleteWorkLog();
   const { toast } = useToast();
 
+  const impactLevel = log.impactLevel || "medium";
+  const impactLabel = {
+    low: "Low Impact",
+    medium: "Medium Impact",
+    high: "High Impact",
+    very_high: "Very High Impact",
+  }[impactLevel] || "Medium Impact";
+
+  const impactBadgeClass = {
+    low: "bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border-emerald-200",
+    medium: "bg-blue-50 text-blue-700 hover:bg-blue-100 border-blue-200",
+    high: "bg-amber-50 text-amber-700 hover:bg-amber-100 border-amber-200",
+    very_high: "bg-red-50 text-red-700 hover:bg-red-100 border-red-200",
+  }[impactLevel] || "bg-blue-50 text-blue-700 hover:bg-blue-100 border-blue-200";
+
   const handleDelete = async () => {
     try {
       await deleteMutation.mutateAsync(log.id);
@@ -52,6 +67,13 @@ export function WorkLogCard({ log }: WorkLogCardProps) {
             <span className="text-border">|</span>
             <Clock className="w-3 h-3" />
             {log.hoursSpent}h
+            {log.component && (
+              <>
+                <span className="text-border">|</span>
+                <Layers className="w-3 h-3" />
+                {log.component}
+              </>
+            )}
           </div>
           <h3 className="text-lg font-bold text-foreground leading-tight group-hover:text-primary transition-colors">
             {log.title}
@@ -142,12 +164,24 @@ export function WorkLogCard({ log }: WorkLogCardProps) {
           </Badge>
         )}
 
-        {log.impact && (
-          <Badge variant="secondary" className="bg-purple-50 text-purple-700 hover:bg-purple-100 border-purple-200">
-            <Target className="w-3 h-3 mr-1" />
-            Impact
-          </Badge>
-        )}
+      {log.impact && (
+        <Badge variant="secondary" className="bg-purple-50 text-purple-700 hover:bg-purple-100 border-purple-200">
+          <Target className="w-3 h-3 mr-1" />
+          Impact noted
+        </Badge>
+      )}
+
+      {log.component && (
+        <Badge variant="secondary" className="bg-sky-50 text-sky-700 hover:bg-sky-100 border-sky-200">
+          <Layers className="w-3 h-3 mr-1" />
+          {log.component}
+        </Badge>
+      )}
+
+      <Badge variant="secondary" className={impactBadgeClass}>
+        <Flame className="w-3 h-3 mr-1" />
+        {impactLabel}
+      </Badge>
       </div>
     </div>
   );

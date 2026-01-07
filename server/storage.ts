@@ -1,5 +1,5 @@
 import { WorkLog, InsertWorkLog, UpdateWorkLogRequest, Component, InsertComponent } from "@shared/schema";
-import fs from "fs/promises";
+import { promises as fs } from "fs";
 import path from "path";
 import { randomUUID } from "crypto";
 
@@ -32,12 +32,38 @@ export class JsonFileStorage implements IStorage {
     } catch (e) {}
   }
 
+  private normalizeLog(log: any): WorkLog {
+    return {
+      id: log.id || randomUUID(),
+      date: log.date || new Date().toISOString(),
+      title: log.title || "",
+      description: log.description || "",
+      impact: log.impact ?? "",
+      jira: log.jira ?? "",
+      type: log.type ?? "task",
+      impactLevel: log.impactLevel ?? "medium",
+      component: log.component ?? "",
+      hoursSpent: typeof log.hoursSpent === "number" ? log.hoursSpent : Number(log.hoursSpent) || 0,
+      issues: log.issues ?? "",
+      iterations: typeof log.iterations === "number" ? log.iterations : Number(log.iterations) || 0,
+      failures: log.failures ?? "",
+      metrics: log.metrics ?? "",
+      images: Array.isArray(log.images) ? log.images : [],
+    };
+  }
+
   private async readLogs(): Promise<WorkLog[]> {
     if (this.logsMemo) return this.logsMemo;
     await this.ensureDataDir();
     try {
       const data = await fs.readFile(DATA_FILE, "utf-8");
-      this.logsMemo = JSON.parse(data);
+      const parsed = JSON.parse(data);
+      const normalized = Array.isArray(parsed) ? parsed.map((log) => this.normalizeLog(log)) : [];
+      const changed = JSON.stringify(parsed) !== JSON.stringify(normalized);
+      this.logsMemo = normalized;
+      if (changed) {
+        await this.writeLogs(normalized);
+      }
       return this.logsMemo!;
     } catch (error) {
       if ((error as any).code === 'ENOENT') {
@@ -93,6 +119,8 @@ export class JsonFileStorage implements IStorage {
       id: randomUUID(),
       date: insertLog.date || new Date().toISOString(),
       impact: insertLog.impact || "",
+      jira: insertLog.jira || "",
+      type: insertLog.type || "task",
       impactLevel: insertLog.impactLevel || "medium",
       component: insertLog.component || "",
       hoursSpent: insertLog.hoursSpent || 0,
@@ -102,6 +130,9 @@ export class JsonFileStorage implements IStorage {
       metrics: insertLog.metrics || "",
       images: insertLog.images || [],
     };
+    if (newLog.component) {
+      await this.createComponent({ name: newLog.component });
+    }
     logs.push(newLog);
     await this.writeLogs(logs);
     return newLog;
@@ -113,6 +144,9 @@ export class JsonFileStorage implements IStorage {
     if (index === -1) throw new Error("Log not found");
     
     const updatedLog = { ...logs[index], ...updates };
+    if (updatedLog.component) {
+      await this.createComponent({ name: updatedLog.component });
+    }
     logs[index] = updatedLog;
     await this.writeLogs(logs);
     return updatedLog;

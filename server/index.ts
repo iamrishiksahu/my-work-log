@@ -3,6 +3,15 @@ import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
 
+// Global handlers to prevent unexpected crashes and to surface useful logs
+process.on("uncaughtException", (err) => {
+  console.error("Uncaught Exception:", err);
+});
+
+process.on("unhandledRejection", (reason) => {
+  console.error("Unhandled Rejection:", reason);
+});
+
 const app = express();
 const httpServer = createServer(app);
 
@@ -66,8 +75,9 @@ app.use((req, res, next) => {
     const status = err.status || err.statusCode || 500;
     const message = err.message || "Internal Server Error";
 
+    // Log the error for diagnostics but do not re-throw so the server keeps running
+    console.error(`Error handling request: ${message}`, err);
     res.status(status).json({ message });
-    throw err;
   });
 
   // importantly only setup vite in development and after
@@ -85,14 +95,12 @@ app.use((req, res, next) => {
   // this serves both the API and the client.
   // It is the only port that is not firewalled.
   const port = parseInt(process.env.PORT || "5000", 10);
-  httpServer.listen(
-    {
-      port,
-      host: "0.0.0.0",
-      reusePort: true,
-    },
-    () => {
-      log(`serving on port ${port}`);
-    },
-  );
+  const listenOpts: any = { port, host: "0.0.0.0" };
+  if (process.platform !== "win32") {
+    listenOpts.reusePort = true;
+  }
+
+  httpServer.listen(listenOpts, () => {
+    log(`serving on port ${port}`);
+  });
 })();

@@ -8,6 +8,8 @@ export const workLogSchema = z.object({
   description: z.string().min(1, "Description is required"),
   impact: z.string().optional(), // "What impact it created"
   impactLevel: z.enum(["low", "medium", "high", "very_high"]).default("medium"),
+  jira: z.string().optional(),
+  type: z.enum(["task", "bug", "feature"]).default("task"),
   component: z.string().optional(),
   hoursSpent: z.coerce.number().min(0).default(0),
   issues: z.string().optional(), // "What issues it faced"
